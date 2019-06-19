@@ -80,8 +80,8 @@
  *
  *      struct FlushMyStream {
  *          void operator()(MyStreamType& s) const {
- *              // e.g. your stream type has a `flush` member function instead of a free function
- *              s.flush();
+ *              // e.g. your stream type's `flush` member function takes an argument
+ *              s.flush(true);
  *          }
  *      };
  *
