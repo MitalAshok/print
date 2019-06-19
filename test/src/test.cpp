@@ -193,18 +193,35 @@ TEST(PrintTests, noexcept_constexpr_tests) {
     constexpr ::void_stream_t void_stream;
     constexpr ::not_a_stream_t not_a_stream;
 
-    ASSERT_TRUE(noexcept(print(file=void_stream)));
-    ASSERT_TRUE(noexcept(print(file=void_stream, 0, 1, 2, "3")));
-    ASSERT_TRUE(noexcept(print(file=not_a_stream, end)));
-    ASSERT_TRUE(noexcept(print(file=void_stream, flush=true)));
-    ASSERT_TRUE(noexcept(print<::dont_flush>(file=not_a_stream, end, flush=true)));
+#undef CONSTEXPR_TRUE
+#define CONSTEXPR_TRUE(x) ASSERT_TRUE((::std::integral_constant<bool, (x)>::value))
+
+    CONSTEXPR_TRUE(noexcept(print(file=void_stream)));
+    CONSTEXPR_TRUE(noexcept(print(file=void_stream, 0, 1, 2, "3")));
+    CONSTEXPR_TRUE(noexcept(print(file=not_a_stream, end)));
+    CONSTEXPR_TRUE(noexcept(print(file=void_stream, flush=true)));
+    CONSTEXPR_TRUE(noexcept(print<::dont_flush>(file=not_a_stream, end, flush=true)));
+
+#define LONG_TEST_CASE_16 LONG_TEST_CASE_14, 0, 0
+#define LONG_TEST_CASE_61 LONG_TEST_CASE_16, LONG_TEST_CASE_16, LONG_TEST_CASE_16, LONG_TEST_CASE_14
+#define LONG_TEST_CASE_64 LONG_TEST_CASE_16, LONG_TEST_CASE_16, LONG_TEST_CASE_16, LONG_TEST_CASE_16
+// 253 because typical implementations will have at least 256 arguments as the maximum number of arguments,
+// and we need to pass `file=` and the implementation of `print` prepends two arguments (Need 3 extra)
+#define LONG_TEST_CASE_253 LONG_TEST_CASE_64, LONG_TEST_CASE_64, LONG_TEST_CASE_64, LONG_TEST_CASE_61
 
 #if !defined(__GNUC__) || defined(__clang__)
     // These will actually just not compile if it's not a constant expression
-    ASSERT_TRUE((::std::integral_constant<bool, (static_cast<void>(print(file=void_stream)), true)>::value));
-    ASSERT_TRUE((::std::integral_constant<bool, (static_cast<void>(print(file=void_stream, 0, 1, 2, "3")), true)>::value));
-    ASSERT_TRUE((::std::integral_constant<bool, (static_cast<void>(print(file=not_a_stream, end)), true)>::value));
-    ASSERT_TRUE((::std::integral_constant<bool, (static_cast<void>(print(file=void_stream, flush=true)), true)>::value));
-    ASSERT_TRUE((::std::integral_constant<bool, (static_cast<void>(print<::dont_flush>(file=not_a_stream, end, flush=true)), true)>::value));
+    CONSTEXPR_TRUE((::std::integral_constant<bool, (static_cast<void>(print(file=void_stream)), true)>::value));
+    CONSTEXPR_TRUE((::std::integral_constant<bool, (static_cast<void>(print(file=void_stream, 0, 1, 2, "3")), true)>::value));
+    CONSTEXPR_TRUE((::std::integral_constant<bool, (static_cast<void>(print(file=not_a_stream, end)), true)>::value));
+    CONSTEXPR_TRUE((::std::integral_constant<bool, (static_cast<void>(print(file=void_stream, flush=true)), true)>::value));
+    CONSTEXPR_TRUE((::std::integral_constant<bool, (static_cast<void>(print<::dont_flush>(file=not_a_stream, end, flush=true)), true)>::value));
+#define LONG_TEST_CASE_14 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    CONSTEXPR_TRUE((::std::integral_constant<bool, (static_cast<void>(print(file=void_stream, LONG_TEST_CASE_253)), true)>::value));
+#undef LONG_TEST_CASE_14
 #endif
+
+// Different types so templates instantiated are different
+#define LONG_TEST_CASE_14 nullptr, nullptr, static_cast<void*>(0), "", 0.0, 0L, 0U, 0UL, 0U, 0U, ' ', 0U, 0U, 0U, 0U
+    CONSTEXPR_TRUE(noexcept(print(LONG_TEST_CASE_253, file=void_stream)));
 }
