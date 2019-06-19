@@ -37,7 +37,7 @@
  *     print(x, y, z, end);
  *     print_no_end(x, y, z);
  *
- * To avoid bringing these two functions into the global scope, define `PRINTER_NO_RAW` before including this file.
+ * To avoid bringing these two functions into the global scope, define `PRINT_NO_RAW` before including this file.
  *
  * `print()`, outputs (through `operator<<`) all the passed arguments to `file`, and outputs `sep` in between
  * each argument. Then, it outputs `end`, and, if `flush` is true, flushes the stream (through std::flush if possible).
@@ -52,7 +52,7 @@
  * Their `operator=` will return an object which will set the corresponding argument to the value it was set to.
  *
  *
- * If you do not want these static variables in the global scope, define `PRINTER_NO_GLOBALS` before including
+ * If you do not want these static variables in the global scope, define `PRINT_NO_GLOBALS` before including
  * this file. These variables are of type `printer::file_t`, `printer::sep_t`, `printer::end_t` and `printer::flush_t`.
  * You can define variables of these types somewhere else, use the static variables in the `printer` namespace (
  * `printer::file`, `printer::sep`, `printer::end` and `printer::flush`) or use rvalues of these types:
@@ -89,19 +89,18 @@
  *      print<FlushMyStream>(1, 2, 3, file=f, flush=true);
  */
 
-
-#ifndef PRINTER_H_
-#define PRINTER_H_
+#ifndef PRINT_H_
+#define PRINT_H_
 
 #include <iostream>
-#include <utility>
 #include <type_traits>
+#include <utility>
 
 // gcc cannot handle the number of `constexpr` functions called
 #if defined(__GNUC__) && !defined(__clang__)
-#define PRINTER_CONSTEXPR
+#define PRINT_CONSTEXPR
 #else
-#define PRINTER_CONSTEXPR constexpr
+#define PRINT_CONSTEXPR constexpr
 #endif
 
 namespace printer {
@@ -111,7 +110,7 @@ namespace printer {
             typename ::std::remove_cv<typename ::std::remove_reference<T>::type>::type,
             typename ::std::remove_cv<typename ::std::remove_reference<U>::type>::type
         >::value> {};
-    }
+    }  // namespace detail
 
     struct sep_t {
         template<class T>
@@ -120,6 +119,8 @@ namespace printer {
         };
 
         template<class T>
+
+        // NOLINTNEXTLINE: operator= doesn't return correct type to implement python-like kwargs. Same for other `operator=`s.
         constexpr value_t<T> operator=(T&& value) const noexcept {
             return value_t<T>{ ::std::forward<T>(value) };
         }
@@ -132,7 +133,7 @@ namespace printer {
         };
 
         template<class T>
-        constexpr value_t<T> operator=(T&& value) const noexcept {
+        constexpr value_t<T> operator=(T&& value) const noexcept {  // NOLINT
             return value_t<T>{ ::std::forward<T>(value) };
         }
     };
@@ -144,7 +145,7 @@ namespace printer {
         };
 
         template<class T>
-        constexpr value_t<T> operator=(T&& value) const noexcept {
+        constexpr value_t<T> operator=(T&& value) const noexcept {  // NOLINT
             return value_t<T>{ ::std::forward<T>(value) };
         }
     };
@@ -154,19 +155,19 @@ namespace printer {
             bool value;
         };
 
-        constexpr value_t operator=(bool value) const noexcept {
+        constexpr value_t operator=(bool value) const noexcept {  // NOLINT
             return value_t{ value };
         }
 
         template<class T>
-        constexpr value_t operator=(T&& value) const noexcept {
+        constexpr value_t operator=(T&& value) const noexcept {  // NOLINT
             return value_t{ static_cast<bool>(::std::forward<T>(value)) };
         }
     };
 
     struct print_nothing_t {
         template<class T>
-        friend constexpr T&& operator<<(T&& os, print_nothing_t) noexcept {
+        friend constexpr T&& operator<<(T&& os, print_nothing_t /*unused*/) noexcept {
             return ::std::forward<T>(os);
         }
 
@@ -178,7 +179,7 @@ namespace printer {
             ::std::integral_constant<bool,
                 detail::is_fwd_same<T, print_nothing_t>::value == detail::is_fwd_same<U, print_nothing_t>::value
             >
-        >::type operator==(const T&, const U&) noexcept {
+        >::type operator==(const T& /*unused*/, const U& /*unused*/) noexcept {
             return ::std::integral_constant<bool,
                 detail::is_fwd_same<T, print_nothing_t>::value == detail::is_fwd_same<U, print_nothing_t>::value
             >{};
@@ -192,7 +193,7 @@ namespace printer {
             ::std::integral_constant<bool,
                 detail::is_fwd_same<T, print_nothing_t>::value != detail::is_fwd_same<U, print_nothing_t>::value
             >
-        >::type operator!=(const T&, const U&) noexcept {
+        >::type operator!=(const T& /*unused*/, const U& /*unused*/) noexcept {
             return ::std::integral_constant<bool,
                 detail::is_fwd_same<T, print_nothing_t>::value != detail::is_fwd_same<U, print_nothing_t>::value
             >{};
@@ -206,7 +207,7 @@ namespace printer {
         }
     };
 
-#ifdef PRINTER_TRY_COMBINE_STATICS
+#ifdef PRINT_TRY_COMBINE_STATICS
     namespace detail {
         struct static_variables_t : sep_t, end_t, file_t, flush_t, print_nothing_t { };
         static constexpr const static_variables_t static_variables;
@@ -226,11 +227,11 @@ namespace printer {
 
     static constexpr const print_nothing_t print_nothing;
 #endif
-}
+}  // namespace printer
 
 
 namespace printer { namespace detail {
-    enum class print_manipulated {
+    enum class print_manipulated : unsigned char {
         none = 0,
         sep = 1,
         end = 2,
@@ -251,6 +252,7 @@ namespace printer { namespace detail {
     struct dependant_false : ::std::false_type { };
 
     template<class SepT, class EndT, class FileT, print_manipulated Manipulated = print_manipulated::none>
+    // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions, hicpp-special-member-functions): Move constructor would be worthless
     struct print_options {
         SepT&& sep;
         EndT&& end;
@@ -262,7 +264,8 @@ namespace printer { namespace detail {
             sep(::std::forward<SepT>(sep_)), end(::std::forward<EndT>(end_)), file(::std::forward<FileT>(file_)), flush(flush_) {}
 
         constexpr print_options(const print_options& other) noexcept : sep(::std::forward<SepT>(other.sep)), end(::std::forward<EndT>(other.end)), file(::std::forward<FileT>(other.file)), flush(other.flush) {}
-        // constexpr print_options& operator=(const print_options&) noexcept = default;
+        constexpr print_options& operator=(const print_options&) noexcept = delete;  // Can't copy references
+        ~print_options() noexcept = default;
 
         static constexpr const bool set_sep = Manipulated & print_manipulated::sep;
         static constexpr const bool set_end = Manipulated & print_manipulated::end;
@@ -290,23 +293,23 @@ namespace printer { namespace detail {
             return { ::std::forward<SepT>(sep), ::std::forward<EndT>(end), ::std::forward<FileT>(file), new_flush.value };
         }
         template<class T = print_nothing_t>
-        constexpr print_options<T, EndT, FileT, Manipulated | print_manipulated::sep> operator+(const sep_t&) const noexcept {
+        constexpr print_options<T, EndT, FileT, Manipulated | print_manipulated::sep> operator+(const sep_t& /*unused*/) const noexcept {
             // Just `sep` is an alias for `sep=print_nothing_t`
             return *this + (sep_t()=T());
         }
         template<class T = print_nothing_t>
-        constexpr print_options<SepT, T, FileT, Manipulated | print_manipulated::end> operator+(const end_t&) const noexcept {
+        constexpr print_options<SepT, T, FileT, Manipulated | print_manipulated::end> operator+(const end_t& /*unused*/) const noexcept {
             // Just `end` is an alias for `end=print_nothing_t`
             return *this + (end_t()=T());
         }
         template<class T = flush_t>
-        constexpr print_options<SepT, EndT, FileT, Manipulated | print_manipulated::flush> operator+(const flush_t&) const noexcept {
+        constexpr print_options<SepT, EndT, FileT, Manipulated | print_manipulated::flush> operator+(const flush_t& /*unused*/) const noexcept {
             // Just `flush` is an alias for `flush=true`
             static_assert(dependant_false<T>::value || !set_flush, "`flush` keyword argument passed multiple times to print().");
             return { ::std::forward<SepT>(sep), ::std::forward<EndT>(end), ::std::forward<FileT>(file), true };
         }
 
-        template<class T> constexpr const print_options& operator+(const T&) const noexcept { return *this; }
+        template<class T> constexpr const print_options& operator+(const T& /*unused*/) const noexcept { return *this; }
     };
 
     template<class T> struct is_print_opt_value : ::std::false_type {};
@@ -327,7 +330,7 @@ namespace printer { namespace detail {
     }
 
     template<class SepT, class EndT, class FileT, print_manipulated Manipulated, class T, class... U>
-    PRINTER_CONSTEXPR auto combine_options(const print_options<SepT, EndT, FileT, Manipulated>& opts, T&& t, U&&... u) noexcept -> decltype(combine_options(opts + t, u...)) {
+    PRINT_CONSTEXPR auto combine_options(const print_options<SepT, EndT, FileT, Manipulated>& opts, T&& t, U&&... u) noexcept -> decltype(combine_options(opts + t, u...)) {
         return combine_options(opts + t, u...);
     }
 
@@ -352,28 +355,28 @@ namespace printer { namespace detail {
 
 #if __cplusplus >= 201402L
     template<bool AlwaysFlush, bool CanFlush, class Flusher, class FileT>
-    PRINTER_CONSTEXPR
-    typename ::std::enable_if<CanFlush && AlwaysFlush>::type print_flush(bool flush, FileT&& f) noexcept(noexcept(Flusher{}(::std::forward<FileT>(f)))) {
+    PRINT_CONSTEXPR
+    typename ::std::enable_if<CanFlush && AlwaysFlush>::type print_flush(bool /*unused*/, FileT&& f) noexcept(noexcept(Flusher{}(::std::forward<FileT>(f)))) {
         Flusher{}(::std::forward<FileT>(f));
     }
 
     template<bool AlwaysFlush, bool CanFlush, class Flusher, class FileT>
-    PRINTER_CONSTEXPR
+    PRINT_CONSTEXPR
     typename ::std::enable_if<CanFlush && !AlwaysFlush>::type print_flush(bool flush, FileT&& f) noexcept(noexcept(Flusher{}(::std::forward<FileT>(f)))) {
         return flush ? static_cast<void>(Flusher{}(::std::forward<FileT>(f))) : static_cast<void>(0);
     }
 
     template<bool AlwaysFlush, bool CanFlush, class Flusher, class FileT>
-    constexpr typename ::std::enable_if<!CanFlush && !AlwaysFlush>::type print_flush(bool, FileT&&) noexcept {}
+    constexpr typename ::std::enable_if<!CanFlush && !AlwaysFlush>::type print_flush(bool /*unused*/, FileT&& /*unused*/) noexcept {}
 #else
     template<bool AlwaysFlush, bool CanFlush, class Flusher, class FileT>
-    PRINTER_CONSTEXPR
+    PRINT_CONSTEXPR
     typename ::std::enable_if<CanFlush && AlwaysFlush, int>::type print_flush(bool flush, FileT&& f) noexcept(noexcept(Flusher{}(::std::forward<FileT>(f)))) {
         return static_cast<void>(Flusher{}(::std::forward<FileT>(f))), 0;
     }
 
     template<bool AlwaysFlush, bool CanFlush, class Flusher, class FileT>
-    PRINTER_CONSTEXPR
+    PRINT_CONSTEXPR
     typename ::std::enable_if<CanFlush && !AlwaysFlush, int>::type print_flush(bool flush, FileT&& f) noexcept(noexcept(Flusher{}(::std::forward<FileT>(f)))) {
         return flush ? (static_cast<void>(Flusher{}(::std::forward<FileT>(f))), 0) : 0;
     }
@@ -389,11 +392,11 @@ namespace printer { namespace detail {
 #endif
 
     template<bool, class PrintOptionsT>
-    constexpr constexpr_return_type print_impl(const PrintOptionsT&) noexcept { return static_cast<constexpr_return_type>(0); }
+    constexpr constexpr_return_type print_impl(const PrintOptionsT& /*unused*/) noexcept { return static_cast<constexpr_return_type>(0); }
 
     template<bool PrintSep, class PrintOptionsT, class Arg, class... Args>
     constexpr typename ::std::enable_if<is_fwd_print_opt_value<Arg>::value, constexpr_return_type>::type
-    print_impl(const PrintOptionsT& opts, Arg&&, Args&&... args) noexcept(noexcept(print_impl<PrintSep>(opts, ::std::forward<Args>(args)...))) {
+    print_impl(const PrintOptionsT& opts, Arg&& /*unused*/, Args&&... args) noexcept(noexcept(print_impl<PrintSep>(opts, ::std::forward<Args>(args)...))) {
         // arg is a print option; ignore
         return static_cast<void>(print_impl<PrintSep>(opts, ::std::forward<Args>(args)...)), static_cast<constexpr_return_type>(0);
     }
@@ -401,7 +404,7 @@ namespace printer { namespace detail {
     template<bool PrintSep, class PrintOptionsT, class Arg, class... Args>
     constexpr
     typename ::std::enable_if<is_fwd_same<Arg, print_nothing_t>::value, constexpr_return_type>::type
-    print_impl(const PrintOptionsT& opts, Arg&&, Args&&... args) noexcept(noexcept(print_impl<false>(opts, ::std::forward<Args>(args)...))) {
+    print_impl(const PrintOptionsT& opts, Arg&& /*unused*/, Args&&... args) noexcept(noexcept(print_impl<false>(opts, ::std::forward<Args>(args)...))) {
         // arg is a print_nothing_t; Now don't print sep even if we were going to
         return static_cast<void>(print_impl<false>(opts, ::std::forward<Args>(args)...)), static_cast<constexpr_return_type>(0);
     }
@@ -446,14 +449,14 @@ namespace printer { namespace detail {
     }
 
     template<class File, class End>
-    PRINTER_CONSTEXPR typename ::std::enable_if<!is_fwd_same<End, print_nothing_t>::value, constexpr_return_type>::type
+    PRINT_CONSTEXPR typename ::std::enable_if<!is_fwd_same<End, print_nothing_t>::value, constexpr_return_type>::type
     print_end_impl(File&& f, End&& end) noexcept(noexcept(f << ::std::forward<End>(end))) {
         return static_cast<void>(f << ::std::forward<End>(end)), static_cast<constexpr_return_type>(0);
     }
 
     template<class File, class End>
     constexpr typename ::std::enable_if<is_fwd_same<End, print_nothing_t>::value, constexpr_return_type>::type
-    print_end_impl(File&&, End&&) noexcept {
+    print_end_impl(File&& /*unused*/, End&& /*unused*/) noexcept {
         return static_cast<constexpr_return_type>(0);
     }
 
@@ -483,7 +486,8 @@ namespace printer { namespace detail {
             ::std::forward<Args>(args)...
         )), static_cast<constexpr_return_type>(0);
     }
-} }
+// NOLINTNEXTLINE(google-readability-namespace-comments, llvm-namespace-comment)
+} }  // namespace printer::detail
 
 namespace printer {
     template<class Flusher = printer::print_flusher, class... Args>
@@ -500,36 +504,36 @@ namespace printer {
     constexpr detail::constexpr_return_type print_no_end(Args&& ... args) noexcept(noexcept(detail::print_impl_3<Flusher, char, print_nothing_t>(' ', print_nothing_t(), ::std::forward<Args>(args)...))) {
         return static_cast<void>(detail::print_impl_3<Flusher, char, print_nothing_t>(' ', print_nothing_t(), ::std::forward<Args>(args)...)), static_cast<detail::constexpr_return_type>(0);
     }
-}
+}  // namespace printer
 
 #endif
 
 // Outside of main header guard so multiple includes
-// where the first defined `PRINTER_NO_GLOBALS`
+// where the first defined `PRINT_NO_GLOBALS`
 // and the second didn't mean that it will have globals.
 // Different header guards so just comments are included
 // if included multiple times.
 
-#ifndef PRINTER_NO_GLOBALS
-#ifndef PRINTER_H_GLOBALS_
-#define PRINTER_H_GLOBALS_
-using printer::sep;
-using printer::end;
-using printer::file;
-using printer::flush;
-using printer::print_nothing;
-using printer::print;
+#ifndef PRINT_NO_GLOBALS
+#ifndef PRINT_H_GLOBALS_
+#define PRINT_H_GLOBALS_
+using printer::sep;  // NOLINT: Bad style to have globals. Which is why it's togglable.
+using printer::end;  // NOLINT
+using printer::file;  // NOLINT
+using printer::flush;  // NOLINT
+using printer::print_nothing;  // NOLINT
+using printer::print;  // NOLINT
 #endif
 #else
-#undef PRINTER_NO_GLOBALS
+#undef PRINT_NO_GLOBALS
 #endif
 
-#ifndef PRINTER_NO_RAW
-#ifndef PRINTER_H_RAW_
-#define PRINTER_H_RAW_
-using printer::raw_print;
-using printer::print_no_end;
+#ifndef PRINT_NO_RAW
+#ifndef PRINT_H_RAW_
+#define PRINT_H_RAW_
+using printer::raw_print;  // NOLINT
+using printer::print_no_end;  // NOLINT
 #endif
 #else
-#undef PRINTER_NO_RAW
+#undef PRINT_NO_RAW
 #endif
