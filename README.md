@@ -63,4 +63,4 @@ int main() {
 
 For more detail, see the file itself.
 
-Tested on g++-8, clang++-7 and MSVC++14.1. Also produces the same assembly as the normal `std::cout << object` would.
+Tested on g++-8, clang++-7 and MSVC++14.1.

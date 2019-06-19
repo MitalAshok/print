@@ -222,6 +222,6 @@ TEST(PrintTests, noexcept_constexpr_tests) {
 #endif
 
 // Different types so templates instantiated are different
-#define LONG_TEST_CASE_14 nullptr, nullptr, static_cast<void*>(0), "", 0.0, 0L, 0U, 0UL, 0U, 0U, ' ', 0U, 0U, 0U, 0U
+#define LONG_TEST_CASE_14 nullptr, nullptr, static_cast<void*>(nullptr), "", 0.0, 0L, 0U, 0UL, 0U, 0U, ' ', 0U, 0U, 0U, 0U
     CONSTEXPR_TRUE(noexcept(print(LONG_TEST_CASE_253, file=void_stream)));
 }
