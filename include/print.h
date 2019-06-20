@@ -324,15 +324,22 @@ namespace printer { namespace detail {
     template<class T>
     struct is_fwd_print_opt_value : ::std::integral_constant<bool, is_print_opt_value<typename ::std::remove_cv<typename ::std::remove_reference<T>::type>::type>::value> {};
 
+#if __cplusplus >= 201703L
+    template<class SepT, class EndT, class FileT, print_manipulated Manipulated, class... Args>
+    PRINT_CONSTEXPR auto combine_options(const print_options<SepT, EndT, FileT, Manipulated>& opts, Args&&... args) noexcept {
+        return (opts + ... + args);
+    }
+#else
     template<class SepT, class EndT, class FileT, print_manipulated Manipulated>
     constexpr print_options<SepT, EndT, FileT, Manipulated> combine_options(const print_options<SepT, EndT, FileT, Manipulated>& opts) noexcept {
         return opts;
     }
 
     template<class SepT, class EndT, class FileT, print_manipulated Manipulated, class T, class... U>
-    PRINT_CONSTEXPR auto combine_options(const print_options<SepT, EndT, FileT, Manipulated>& opts, T&& t, U&&... u) noexcept -> decltype(combine_options(opts + t, u...)) {
+    PRINT_CONSTEXPR auto combine_options(const print_options<SepT, EndT, FileT, Manipulated>& opts, const T& t, const U&... u) noexcept -> decltype(combine_options(opts + t, u...)) {
         return combine_options(opts + t, u...);
     }
+#endif
 
     constexpr bool fold_or(bool b) noexcept {
         return b;
@@ -355,30 +362,30 @@ namespace printer { namespace detail {
 
 #if __cplusplus >= 201402L
     template<bool AlwaysFlush, bool CanFlush, class Flusher, class FileT>
-    PRINT_CONSTEXPR
-    typename ::std::enable_if<CanFlush && AlwaysFlush>::type print_flush(bool /*unused*/, FileT&& f) noexcept(noexcept(Flusher{}(::std::forward<FileT>(f)))) {
-        Flusher{}(::std::forward<FileT>(f));
+    constexpr
+    typename ::std::enable_if<CanFlush && AlwaysFlush>::type print_flush(bool /*unused*/, FileT&& f) noexcept(noexcept(Flusher{}(f))) {
+        Flusher{}(f);
     }
 
     template<bool AlwaysFlush, bool CanFlush, class Flusher, class FileT>
-    PRINT_CONSTEXPR
-    typename ::std::enable_if<CanFlush && !AlwaysFlush>::type print_flush(bool flush, FileT&& f) noexcept(noexcept(Flusher{}(::std::forward<FileT>(f)))) {
-        return flush ? static_cast<void>(Flusher{}(::std::forward<FileT>(f))) : static_cast<void>(0);
+    constexpr
+    typename ::std::enable_if<CanFlush && !AlwaysFlush>::type print_flush(bool flush, FileT&& f) noexcept(noexcept(Flusher{}(f))) {
+        return flush ? static_cast<void>(Flusher{}(f)) : static_cast<void>(0);
     }
 
     template<bool AlwaysFlush, bool CanFlush, class Flusher, class FileT>
     constexpr typename ::std::enable_if<!CanFlush && !AlwaysFlush>::type print_flush(bool /*unused*/, FileT&& /*unused*/) noexcept {}
 #else
     template<bool AlwaysFlush, bool CanFlush, class Flusher, class FileT>
-    PRINT_CONSTEXPR
-    typename ::std::enable_if<CanFlush && AlwaysFlush, int>::type print_flush(bool flush, FileT&& f) noexcept(noexcept(Flusher{}(::std::forward<FileT>(f)))) {
-        return static_cast<void>(Flusher{}(::std::forward<FileT>(f))), 0;
+    constexpr
+    typename ::std::enable_if<CanFlush && AlwaysFlush, int>::type print_flush(bool flush, FileT&& f) noexcept(noexcept(Flusher{}(f))) {
+        return static_cast<void>(Flusher{}(f)), 0;
     }
 
     template<bool AlwaysFlush, bool CanFlush, class Flusher, class FileT>
-    PRINT_CONSTEXPR
-    typename ::std::enable_if<CanFlush && !AlwaysFlush, int>::type print_flush(bool flush, FileT&& f) noexcept(noexcept(Flusher{}(::std::forward<FileT>(f)))) {
-        return flush ? (static_cast<void>(Flusher{}(::std::forward<FileT>(f))), 0) : 0;
+    constexpr
+    typename ::std::enable_if<CanFlush && !AlwaysFlush, int>::type print_flush(bool flush, FileT&& f) noexcept(noexcept(Flusher{}(f))) {
+        return flush ? (static_cast<void>(Flusher{}(f)), 0) : 0;
     }
 
     template<bool AlwaysFlush, bool CanFlush, class Flusher, class FileT>
@@ -449,7 +456,7 @@ namespace printer { namespace detail {
     }
 
     template<class File, class End>
-    PRINT_CONSTEXPR typename ::std::enable_if<!is_fwd_same<End, print_nothing_t>::value, constexpr_return_type>::type
+    constexpr typename ::std::enable_if<!is_fwd_same<End, print_nothing_t>::value, constexpr_return_type>::type
     print_end_impl(File&& f, End&& end) noexcept(noexcept(f << ::std::forward<End>(end))) {
         return static_cast<void>(f << ::std::forward<End>(end)), static_cast<constexpr_return_type>(0);
     }
@@ -460,11 +467,25 @@ namespace printer { namespace detail {
         return static_cast<constexpr_return_type>(0);
     }
 
+    // gcc can't handle `noexcept(print_end_impl(opts.file, ::std::forward<decltype(opts.end)>(opts.end)))`
+    // but it works if it's inlined for some reason
+    template<class Opts, bool is_print_nothing = is_fwd_same<decltype(::std::declval<Opts>().end), print_nothing_t>::value>
+    struct is_end_noexcept : ::std::integral_constant<bool, noexcept(::std::declval<Opts>().file << ::std::declval<decltype(::std::declval<Opts>().end)>())> {};
+
+    template<class Opts>
+    struct is_end_noexcept<Opts, true> : ::std::true_type {};
+
+    template<class Flusher, class Opts, bool can_flush>
+    struct is_flush_noexcept : ::std::integral_constant<bool, noexcept(Flusher{}(::std::declval<Opts>().file))> {};
+
+    template<class Flusher, class Opts>
+    struct is_flush_noexcept<Flusher, Opts, false> : ::std::true_type {};
+
     template<class Flusher, class Opts, class... Args>
     constexpr constexpr_return_type print_impl_2(const Opts& opts, Args&&... args) noexcept(
         noexcept(print_impl<false>(opts, ::std::forward<Args>(args)...)) &&
-        noexcept(print_end_impl(opts.file, ::std::forward<decltype(opts.end)>(opts.end))) &&
-        noexcept(print_flush<print_will_always_flush<Args...>::value, print_can_possibly_flush<Args...>::value, Flusher>(opts.flush, opts.file))
+        is_end_noexcept<const Opts&>::value &&
+        is_flush_noexcept<Flusher, const Opts&, print_can_possibly_flush<Args...>::value>::value
     ) {
         return (
             static_cast<void>(print_impl<false>(opts, ::std::forward<Args>(args)...)),
