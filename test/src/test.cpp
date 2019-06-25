@@ -209,7 +209,7 @@ TEST(PrintTests, noexcept_constexpr_tests) {
 // and we need to pass `file=` and the implementation of `print` prepends two arguments (Need 3 extra)
 #define LONG_TEST_CASE_253 LONG_TEST_CASE_64, LONG_TEST_CASE_64, LONG_TEST_CASE_64, LONG_TEST_CASE_61
 
-#if !defined(__GNUC__) || defined(__clang__) || __cplusplus >= 201403L
+#if PRINT_IS_CONSTEXPR
     // These will actually just not compile if it's not a constant expression
     CONSTEXPR_TRUE((::std::integral_constant<bool, (static_cast<void>(print(file=void_stream)), true)>::value));
     CONSTEXPR_TRUE((::std::integral_constant<bool, (static_cast<void>(print(file=void_stream, 0, 1, 2, "3")), true)>::value));
