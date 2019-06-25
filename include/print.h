@@ -96,11 +96,22 @@
 #include <type_traits>
 #include <utility>
 
-// gcc cannot handle the number of `constexpr` functions called
-#if defined(__GNUC__) && !defined(__clang__)
+// gcc segfaults if constexpr because of the comma expressions?
+#if defined(__GNUC__) && !defined(__clang__) && __cplusplus < 201403L
 #define PRINT_CONSTEXPR
 #else
 #define PRINT_CONSTEXPR constexpr
+#endif
+
+// -Wcomma is just broken for some reason (Saying to wrap expressions in `static_cast<void>(static_cast<void>(...))`)
+// Also don't care about padding for internal struct `printer::detail::print_options`
+// The only other warning is -Wc++98-compat, which this header is not, so you should not have it enabled when compiling
+#ifdef __clang__
+#if __clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 9)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcomma"
+#pragma GCC diagnostic ignored "-Wpadded"
+#endif
 #endif
 
 namespace printer {
@@ -326,7 +337,7 @@ namespace printer { namespace detail {
 
 #if __cplusplus >= 201703L
     template<class SepT, class EndT, class FileT, print_manipulated Manipulated, class... Args>
-    PRINT_CONSTEXPR auto combine_options(const print_options<SepT, EndT, FileT, Manipulated>& opts, Args&&... args) noexcept {
+    constexpr auto combine_options(const print_options<SepT, EndT, FileT, Manipulated>& opts, Args&&... args) noexcept {
         return (opts + ... + args);
     }
 #else
@@ -433,12 +444,20 @@ namespace printer { namespace detail {
     noexcept(noexcept(opts.file << opts.sep) && noexcept(opts.file << ::std::forward<Arg>(arg)) && noexcept(print_impl<true>(opts, ::std::forward<Args>(args)...)))
     {
         // print the separator before printing the value
+
+        // For some reason gcc segfaults if this is a comma expression
+#if __cplusplus >= 201403L
+        opts.file << opts.sep;
+        opts.file << ::std::forward<Arg>(arg);
+        print_impl<true>(opts, ::std::forward<Args>(args)...);
+#else
         return (
             static_cast<void>(opts.file << opts.sep),
             static_cast<void>(opts.file << ::std::forward<Arg>(arg)),
             static_cast<void>(print_impl<true>(opts, ::std::forward<Args>(args)...)),
             static_cast<constexpr_return_type>(0)
         );
+#endif
     }
 
     template<bool PrintSep, class PrintOptionsT, class Arg, class... Args>
@@ -526,6 +545,13 @@ namespace printer {
         return static_cast<void>(detail::print_impl_3<Flusher, char, print_nothing_t>(' ', print_nothing_t(), ::std::forward<Args>(args)...)), static_cast<detail::constexpr_return_type>(0);
     }
 }  // namespace printer
+
+#ifdef __clang__
+// Stop ignoring -Wcomma and -Wpadded
+#if __clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 9)
+#pragma GCC diagnostic pop
+#endif
+#endif
 
 #endif
 
